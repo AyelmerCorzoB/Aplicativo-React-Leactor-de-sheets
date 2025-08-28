@@ -1,77 +1,114 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "@/components/ui/table"
-  
-  interface ColumnConfig {
-    name: string
-    visible: boolean
-    filterable: boolean
-  }
-  
-  interface DataTableProps {
-    data: any[]
-    columns: string[]
-    columnConfig: ColumnConfig[]
-    loading: boolean
-    error: string | null
-  }
-  
-  export const DataTable = ({ data, columns, columnConfig, loading, error }: DataTableProps) => {
+import React, { Suspense } from "react"
+
+const LazyDataManagement = React.lazy(() =>
+  import("@/components/DataManagement").then((module) => ({ default: module.DataManagement })),
+)
+
+interface ColumnConfig {
+  name: string
+  visible: boolean
+  filterable: boolean
+}
+
+interface FilterConfig {
+  column: string
+  value: string
+  enabled: boolean
+}
+
+interface DataTableProps {
+  data: any[]
+  columns: string[]
+  columnConfig: ColumnConfig[]
+  setColumnConfig?: (config: ColumnConfig[]) => void
+  filterConfig?: FilterConfig[]
+  setFilterConfig?: (config: FilterConfig[]) => void
+  globalSearch?: string
+  setGlobalSearch?: (search: string) => void
+  onRefresh?: () => void
+  onExport?: () => void
+  loading: boolean
+  error: string | null
+}
+
+const LoadingComponent = React.memo(() => (
+  <div className="flex items-center justify-center p-8">
+    <div className="flex flex-col items-center gap-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#F26B76" }}></div>
+      <p className="text-muted-foreground">Cargando datos...</p>
+    </div>
+  </div>
+))
+
+LoadingComponent.displayName = "LoadingComponent"
+
+const ErrorComponent = React.memo(({ error }: { error: string }) => (
+  <div className="flex items-center justify-center p-8">
+    <div className="text-center">
+      <div className="text-red-500 mb-2">Error al cargar los datos</div>
+      <p className="text-sm text-muted-foreground">{error}</p>
+    </div>
+  </div>
+))
+
+ErrorComponent.displayName = "ErrorComponent"
+
+const EmptyStateComponent = React.memo(() => (
+  <div className="flex items-center justify-center p-8">
+    <div className="text-center">
+      <p className="text-muted-foreground mb-2">No hay datos disponibles</p>
+      <p className="text-sm text-muted-foreground">Intenta actualizar o verificar la conexión</p>
+    </div>
+  </div>
+))
+
+EmptyStateComponent.displayName = "EmptyStateComponent"
+
+export const DataTable = React.memo(
+  ({
+    data,
+    columns,
+    columnConfig,
+    setColumnConfig,
+    filterConfig,
+    setFilterConfig,
+    globalSearch = "",
+    setGlobalSearch = () => {},
+    onRefresh = () => {},
+    onExport = () => {},
+    loading,
+    error,
+  }: DataTableProps) => {
     if (loading) {
-      return (
-        <div className="p-4 text-center text-muted-foreground">
-          Cargando datos...
-        </div>
-      )
+      return <LoadingComponent />
     }
-  
+
     if (error) {
-      return (
-        <div className="p-4 text-center text-red-500">
-          Error: {error}
-        </div>
-      )
+      return <ErrorComponent error={error} />
     }
-  
+
     if (!data.length) {
-      return (
-        <div className="p-4 text-center text-muted-foreground">
-          No hay datos disponibles
-        </div>
-      )
+      return <EmptyStateComponent />
     }
-  
-    const visibleColumns = columns.filter(
-      (col) => columnConfig.find((c) => c.name === col)?.visible
-    )
-  
+
     return (
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {visibleColumns.map((col) => (
-                <TableHead key={col}>{col}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((row, idx) => (
-              <TableRow key={idx}>
-                {visibleColumns.map((col) => (
-                  <TableCell key={col}>{row[col]}</TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <Suspense fallback={<LoadingComponent />}>
+        <LazyDataManagement
+          data={data}
+          columns={columns}
+          columnConfig={columnConfig}
+          setColumnConfig={setColumnConfig || (() => {})}
+          filterConfig={filterConfig || []}
+          setFilterConfig={setFilterConfig || (() => {})}
+          globalSearch={globalSearch}
+          setGlobalSearch={setGlobalSearch}
+          onRefresh={onRefresh}
+          onExport={onExport}
+        />
+      </Suspense>
     )
-  }
-  
+  },
+)
+
+DataTable.displayName = "DataTable"
