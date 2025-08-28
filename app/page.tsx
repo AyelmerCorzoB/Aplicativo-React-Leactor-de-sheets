@@ -1,103 +1,115 @@
-import Image from "next/image";
+"use client"
+import { useState, useMemo } from "react"
+import { Filter } from "lucide-react"
+import { useGoogleSheets } from "@/hooks/useGoogleSheets"
+import { DataTable } from "@/components/ui/datatable"
+import { SettingsPanel } from "@/components/SettingsPanel"
+import { Header } from "@/components/Header"
+import { exportToExcel } from "@/utils/exportToExcel"
 
-export default function Home() {
+const SPREADSHEET_ID = "1i62vYPPfk6vQr1IRXIzrvthu1CFs-WSyBI61Dk4rZgI"
+
+const AVAILABLE_SHEETS = [
+  { name: "DATOS CLIENTES", gid: "0" },
+  { name: "DATOS CLIENTES2", gid: "673856019" },
+]
+
+export default function GoogleSheetsApp() {
+  const [selectedSheet, setSelectedSheet] = useState(AVAILABLE_SHEETS[0].gid)
+  const [globalSearch, setGlobalSearch] = useState("")
+  const [showSettings, setShowSettings] = useState(false)
+
+  const { data, columns, columnConfig, setColumnConfig, filterConfig, setFilterConfig, loading, error, fetchData } =
+    useGoogleSheets(SPREADSHEET_ID, selectedSheet)
+
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0) return []
+
+    let filtered = [...data]
+
+    // Apply global search
+    if (globalSearch.trim()) {
+      const searchTerm = globalSearch.toLowerCase().trim()
+      filtered = filtered.filter((row) =>
+        Object.values(row).some((value) => String(value).toLowerCase().includes(searchTerm)),
+      )
+    }
+
+    // Apply column filters
+    const activeFilters = filterConfig.filter((f) => f.enabled && f.value.trim())
+    activeFilters.forEach((filter) => {
+      filtered = filtered.filter((row) =>
+        String(row[filter.column] || "")
+          .toLowerCase()
+          .includes(filter.value.toLowerCase()),
+      )
+    })
+
+    return filtered
+  }, [data, globalSearch, filterConfig])
+
+  const handleExport = () => {
+    try {
+      exportToExcel(filteredData, columns, columnConfig, "datos-clientes.xlsx")
+    } catch (error) {
+      console.error("Error exporting data:", error)
+    }
+  }
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <Header
+          globalSearch={globalSearch}
+          setGlobalSearch={setGlobalSearch}
+          availableSheets={AVAILABLE_SHEETS}
+          selectedSheet={selectedSheet}
+          setSelectedSheet={setSelectedSheet}
+          fetchData={fetchData}
+          exportToCSV={handleExport}
+          showSettings={showSettings}
+          setShowSettings={setShowSettings}
         />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+        {showSettings && (
+          <div className="bg-card border-2 border-secondary/20 rounded-lg p-4 shadow-sm">
+            <SettingsPanel
+              columns={columns}
+              columnConfig={columnConfig}
+              setColumnConfig={setColumnConfig}
+              filterConfig={filterConfig}
+              setFilterConfig={setFilterConfig}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {!loading && !error && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Mostrando {filteredData.length} de {data.length} registros
+                {globalSearch && ` (filtrado por: "${globalSearch}")`}
+              </span>
+              {filterConfig.some((f) => f.enabled) && (
+                <span className="flex items-center gap-1" style={{ color: "#03A66A" }}>
+                  <Filter className="h-3 w-3" />
+                  {filterConfig.filter((f) => f.enabled).length} filtros activos
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="bg-card border-2 border-primary/20 rounded-lg overflow-hidden shadow-sm">
+            <DataTable
+              data={filteredData}
+              columns={columns}
+              columnConfig={columnConfig}
+              loading={loading}
+              error={error}
+            />
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
-  );
+  )
 }
